@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:guardian_shield/services/location_service.dart';
+import 'package:guardian_shield/services/location_tracking_service.dart';
 import 'package:geolocator/geolocator.dart';
+import 'dart:async';
 
 class LocationTrackingScreen extends StatefulWidget {
   const LocationTrackingScreen({super.key});
@@ -14,58 +15,78 @@ class _LocationTrackingScreenState extends State<LocationTrackingScreen> {
   GoogleMapController? _mapController;
   Position? _currentPosition;
   bool _isTracking = false;
-  final Set<Marker> _markers = {};
+  Set<Marker> _markers = {};
+  StreamSubscription<Position>? _locationSubscription;
+  StreamSubscription<Set<Marker>>? _markersSubscription;
+  double _totalDistance = 0.0;
+  final LocationTrackingService _locationService = LocationTrackingService.instance;
 
   @override
   void initState() {
     super.initState();
     _getCurrentLocation();
+    _setupStreams();
+  }
+
+  void _setupStreams() {
+    // Listen to location updates
+    _locationSubscription = _locationService.locationStream.listen((position) {
+      if (mounted) {
+        setState(() {
+          _currentPosition = position;
+          _totalDistance = _locationService.getTotalDistance();
+        });
+        _animateToPosition(position);
+      }
+    });
+
+    // Listen to marker updates
+    _markersSubscription = _locationService.markersStream.listen((markers) {
+      if (mounted) {
+        setState(() {
+          _markers = markers;
+        });
+      }
+    });
   }
 
   Future<void> _getCurrentLocation() async {
-    final position = await LocationService.getCurrentLocation();
-    if (position != null) {
+    final position = await _locationService.getCurrentLocation();
+    if (position != null && mounted) {
       setState(() {
         _currentPosition = position;
-        _markers.add(
-          Marker(
-            markerId: const MarkerId('current'),
-            position: LatLng(position.latitude, position.longitude),
-            infoWindow: const InfoWindow(title: 'Your Location'),
-          ),
-        );
+        _markers = _locationService.markers;
       });
-      _mapController?.animateCamera(
-        CameraUpdate.newLatLng(
-          LatLng(position.latitude, position.longitude),
-        ),
-      );
+      _animateToPosition(position);
     }
   }
 
-  void _toggleTracking() {
-    setState(() => _isTracking = !_isTracking);
+  void _animateToPosition(Position position) {
+    _mapController?.animateCamera(
+      CameraUpdate.newLatLng(
+        LatLng(position.latitude, position.longitude),
+      ),
+    );
+  }
+
+  Future<void> _toggleTracking() async {
     if (_isTracking) {
-      LocationService.getLocationStream().listen((position) {
+      _locationService.stopTracking();
+      setState(() => _isTracking = false);
+    } else {
+      final success = await _locationService.startTracking();
+      if (success) {
+        setState(() => _isTracking = true);
+      } else {
         if (mounted) {
-          setState(() {
-            _currentPosition = position;
-            _markers.clear();
-            _markers.add(
-              Marker(
-                markerId: const MarkerId('current'),
-                position: LatLng(position.latitude, position.longitude),
-                infoWindow: const InfoWindow(title: 'Your Location'),
-              ),
-            );
-          });
-          _mapController?.animateCamera(
-            CameraUpdate.newLatLng(
-              LatLng(position.latitude, position.longitude),
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to start location tracking. Please check permissions and location services.'),
+              backgroundColor: Colors.red,
             ),
           );
         }
-      });
+      }
     }
   }
 
@@ -157,6 +178,16 @@ class _LocationTrackingScreenState extends State<LocationTrackingScreen> {
                       'Lng: ${_currentPosition!.longitude.toStringAsFixed(6)}',
                       style: theme.textTheme.bodySmall,
                     ),
+                    if (_isTracking && _totalDistance > 0) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Distance: ${(_totalDistance / 1000).toStringAsFixed(2)} km',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ],
                 ],
               ),
@@ -185,6 +216,8 @@ class _LocationTrackingScreenState extends State<LocationTrackingScreen> {
 
   @override
   void dispose() {
+    _locationSubscription?.cancel();
+    _markersSubscription?.cancel();
     _mapController?.dispose();
     super.dispose();
   }
