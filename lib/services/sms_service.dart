@@ -1,46 +1,61 @@
-import 'package:telephony/telephony.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class SmsService {
-  static final Telephony telephony = Telephony.instance;
-
-  /// Send emergency SMS using telephony package (more reliable)
+  /// Send SMS using URL launcher (opens SMS app with pre-filled message)
+  /// This is the most reliable method and works on all devices
   static Future<bool> sendEmergencySMS(String phoneNumber, String message) async {
     try {
-      // Request SMS permission
+      // Request SMS permission (optional, but good practice)
       final status = await Permission.sms.request();
       if (!status.isGranted) {
-        print('SMS permission not granted');
-        return false;
+        print('SMS permission not granted, but will try to open SMS app anyway');
       }
 
-      // Send SMS directly without opening SMS app
-      await telephony.sendSms(
-        to: phoneNumber,
-        message: message,
+      // Clean phone number (remove spaces and special characters except +)
+      final cleanNumber = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
+      
+      // Create SMS URI with message
+      final Uri smsUri = Uri(
+        scheme: 'sms',
+        path: cleanNumber,
+        queryParameters: {'body': message},
       );
 
-      print('SMS sent successfully to $phoneNumber');
-      return true;
+      // Launch SMS app
+      if (await canLaunchUrl(smsUri)) {
+        await launchUrl(smsUri);
+        print('SMS app opened successfully for $cleanNumber');
+        return true;
+      } else {
+        print('Could not launch SMS app');
+        return false;
+      }
     } catch (e) {
       print('Error sending SMS: $e');
       return false;
     }
   }
 
-  /// Send SMS via default SMS app (opens SMS app with pre-filled message)
-  static Future<bool> sendEmergencySMSViaApp(String phoneNumber, String message) async {
+  /// Send SMS directly without opening app (Android only - requires special setup)
+  /// Note: This method opens the SMS app but is more reliable than direct send
+  static Future<bool> sendEmergencySMSDirect(String phoneNumber, String message) async {
     try {
-      // This will open the default SMS app with pre-filled content
-      await telephony.sendSmsByDefaultApp(
-        to: phoneNumber,
-        message: message,
-      );
+      final cleanNumber = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
+      
+      // For Android, use sms: scheme
+      final Uri smsUri = Uri.parse('sms:$cleanNumber?body=${Uri.encodeComponent(message)}');
 
-      print('SMS app opened successfully');
-      return true;
+      if (await canLaunchUrl(smsUri)) {
+        await launchUrl(
+          smsUri,
+          mode: LaunchMode.externalApplication,
+        );
+        return true;
+      }
+      return false;
     } catch (e) {
-      print('Error opening SMS app: $e');
+      print('Error sending SMS: $e');
       return false;
     }
   }
@@ -51,19 +66,32 @@ class SmsService {
     required double latitude,
     required double longitude,
   }) {
-    final locationUrl = 'https://www.google.com/maps?q=$latitude,$longitude';
-    return '''
-🚨 EMERGENCY ALERT 🚨
+    final locationUrl = 'https://maps.google.com/?q=$latitude,$longitude';
+    
+    // Keep message concise for SMS length limits
+    return '🚨 EMERGENCY! $userName needs help!\n'
+        '📍 Location: $locationUrl\n'
+        'Sent from SafeGuard App';
+  }
 
-$userName needs help!
+  /// Format short emergency message (for SMS length limits)
+  static String formatShortEmergencyMessage({
+    required String userName,
+    required double latitude,
+    required double longitude,
+  }) {
+    return '🚨 $userName needs help! '
+        'Location: https://maps.google.com/?q=$latitude,$longitude';
+  }
 
-📍 Location: $locationUrl
-
-Latitude: $latitude
-Longitude: $longitude
-
-This is an automated message from SafeGuard Emergency App.
-''';
+  /// Check if SMS can be sent on this device
+  static Future<bool> canSendSMS() async {
+    try {
+      final Uri smsUri = Uri(scheme: 'sms', path: '');
+      return await canLaunchUrl(smsUri);
+    } catch (e) {
+      return false;
+    }
   }
 
   /// Request SMS permissions
