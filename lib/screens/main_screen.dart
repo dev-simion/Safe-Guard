@@ -73,7 +73,7 @@ class _MainScreenState extends State<MainScreen> {
                 ),
                 _buildNavItem(
                   icon: Icons.chat_bubble,
-                  label: 'Support',
+                  label: 'AI Assistant',
                   index: 3,
                   theme: theme,
                   isDark: isDark,
