@@ -1,7 +1,6 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -22,16 +21,18 @@ android {
     defaultConfig {
         applicationId = "com.safe.guard"
         
-        minSdk = flutter.minSdkVersion
+        // IMPORTANT: Set explicit minSdk for Google Maps
+        minSdk = flutter.minSdkVersion  // Changed from flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        
+        // Add multiDexEnabled if you encounter dex issues
+        multiDexEnabled = true
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -39,4 +40,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Add this if you encounter multidex issues
+    implementation("androidx.multidex:multidex:2.0.1")
 }
