@@ -1,3 +1,5 @@
+// Written by Human - Simion Sterling
+
 import 'package:flutter/material.dart';
 import 'package:guardian_shield/theme.dart';
 import 'package:guardian_shield/screens/main_screen.dart';

@@ -34,10 +34,8 @@ class PublicIncident {
   factory PublicIncident.fromJson(Map<String, dynamic> json) {
     // Debug media URLs parsing
     final rawMediaUrls = json['media_urls'];
-    print('🔍 Raw media_urls from DB: $rawMediaUrls (type: ${rawMediaUrls.runtimeType})');
     
     final mediaUrls = List<String>.from(rawMediaUrls ?? []);
-    print('🔍 Parsed media URLs: $mediaUrls');
     
     return PublicIncident(
       id: json['id'],

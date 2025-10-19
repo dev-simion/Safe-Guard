@@ -47,7 +47,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
       });
       _scrollToBottom();
     } catch (e) {
-      print('Error loading conversation: $e');
     }
   }
 
