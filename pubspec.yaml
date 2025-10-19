@@ -23,6 +23,7 @@ dependencies:
   flutter_phone_direct_caller: ^2.2.1
   url_launcher: ^6.3.2
   share_plus: ^12.0.0
+  fluttertoast: ^9.0.0
 
 dev_dependencies:
   flutter_test:

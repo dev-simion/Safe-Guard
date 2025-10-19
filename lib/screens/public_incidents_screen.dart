@@ -5,6 +5,7 @@ import 'package:guardian_shield/services/location_service.dart';
 import 'package:guardian_shield/services/storage_service.dart';
 import 'package:guardian_shield/services/supabase_service.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class PublicIncidentsScreen extends StatefulWidget {
   const PublicIncidentsScreen({super.key});
@@ -26,8 +27,14 @@ class _PublicIncidentsScreenState extends State<PublicIncidentsScreen> {
   }
 
   Future<void> _loadIncidents() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+    
+    // Test database connection first
+    await _incidentService.testDatabaseConnection();
+    
     final incidents = await _incidentService.getAllIncidents();
+    if (!mounted) return;
     setState(() {
       _incidents = incidents;
       _isLoading = false;
@@ -169,17 +176,19 @@ class _PublicIncidentsScreenState extends State<PublicIncidentsScreen> {
   Future<void> _submitIncident(
       String title, String desc, List<PlatformFile> files) async {
     final userId = SupabaseService.client.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) {
+      _showToast('Please log in to report incidents', isError: true);
+      return;
+    }
 
     final position = await LocationService.getCurrentLocation();
-    if (position == null) return;
-
-    // Show loading indicator
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Submitting incident...')),
-      );
+    if (position == null) {
+      _showToast('Unable to get your location. Please enable location services.', isError: true);
+      return;
     }
+
+    // Show loading toast
+    _showToast('Submitting incident...', isLoading: true);
 
     final mediaUrls =
         await _storageService.uploadMultipleFiles(files, 'incidents');
@@ -196,40 +205,40 @@ class _PublicIncidentsScreenState extends State<PublicIncidentsScreen> {
     if (result != null) {
       // Add a small delay to ensure database replication
       await Future.delayed(const Duration(milliseconds: 500));
-      await _loadIncidents();
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Incident reported successfully!'),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        await _loadIncidents();
+        _showToast('✅ Incident reported successfully!', isSuccess: true);
       }
+      print('✅ Incident created successfully with ID: ${result.id}');
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.error, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Failed to submit incident'),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        _showToast('❌ Failed to submit incident. Please try again.', isError: true);
       }
+      print('❌ Incident creation failed');
     }
+  }
+
+  void _showToast(String message, {bool isError = false, bool isSuccess = false, bool isLoading = false}) {
+    Color backgroundColor;
+    if (isError) {
+      backgroundColor = Colors.red;
+    } else if (isSuccess) {
+      backgroundColor = Colors.green;
+    } else if (isLoading) {
+      backgroundColor = Colors.orange;
+    } else {
+      backgroundColor = Colors.grey[800]!;
+    }
+
+    Fluttertoast.showToast(
+      msg: message,
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.BOTTOM,
+      timeInSecForIosWeb: 3,
+      backgroundColor: backgroundColor,
+      textColor: Colors.white,
+      fontSize: 16.0,
+    );
   }
 
   @override

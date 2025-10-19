@@ -1,9 +1,9 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../supabase/supabase_config.dart'; // Changed from 'supabase_service.dart'
+import 'supabase_service.dart';
 
 class UserService {
   static SupabaseClient get _client =>
-      SupabaseConfig.client; // Use SupabaseConfig
+      SupabaseService.client;
 
   // Get current user profile
   static Future<Map<String, dynamic>?> getUserProfile() async {
@@ -40,9 +40,14 @@ class UserService {
     try {
       final user = _client.auth.currentUser;
       if (user == null) {
-        print('No user found in _ensureUserProfileExists');
+        print('❌ No user found in _ensureUserProfileExists');
+        print('🔐 Auth state: ${_client.auth.currentSession}');
         return false;
       }
+      
+      print('✅ User authenticated: ${user.id}');
+      print('📧 User email: ${user.email}');
+      print('🔑 JWT token exists: ${_client.auth.currentSession?.accessToken != null}');
 
       // Check if profile already exists
       final existing = await _client
