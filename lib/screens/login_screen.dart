@@ -3,6 +3,8 @@ import 'package:guardian_shield/auth/supabase_auth_manager.dart';
 import 'package:guardian_shield/screens/signup_screen.dart';
 import 'package:guardian_shield/screens/main_screen.dart';
 
+
+// Authentication Screen.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 

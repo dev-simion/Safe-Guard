@@ -7,6 +7,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
 
+// Main UI Screen. 
+
 class SOSScreen extends StatefulWidget {
   const SOSScreen({super.key});
 

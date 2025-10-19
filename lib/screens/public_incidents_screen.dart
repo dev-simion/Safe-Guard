@@ -49,7 +49,8 @@ class _PublicIncidentsScreenState extends State<PublicIncidentsScreen> {
           builder: (context, setModalState) => Container(
             decoration: BoxDecoration(
               color: theme.colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -112,7 +113,8 @@ class _PublicIncidentsScreenState extends State<PublicIncidentsScreen> {
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () async {
-                            final files = await _storageService.pickMultipleImages();
+                            final files =
+                                await _storageService.pickMultipleImages();
                             if (files.isNotEmpty) {
                               setModalState(() => selectedFiles.addAll(files));
                             }
@@ -132,7 +134,8 @@ class _PublicIncidentsScreenState extends State<PublicIncidentsScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () async {
-                        if (titleController.text.isEmpty || descController.text.isEmpty) {
+                        if (titleController.text.isEmpty ||
+                            descController.text.isEmpty) {
                           return;
                         }
 
@@ -163,16 +166,25 @@ class _PublicIncidentsScreenState extends State<PublicIncidentsScreen> {
     );
   }
 
-  Future<void> _submitIncident(String title, String desc, List<PlatformFile> files) async {
-    final userId = SupabaseService.auth.currentUser?.id;
+  Future<void> _submitIncident(
+      String title, String desc, List<PlatformFile> files) async {
+    final userId = SupabaseService.client.auth.currentUser?.id;
     if (userId == null) return;
 
     final position = await LocationService.getCurrentLocation();
     if (position == null) return;
 
-    final mediaUrls = await _storageService.uploadMultipleFiles(files, 'incidents');
+    // Show loading indicator
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Submitting incident...')),
+      );
+    }
 
-    await _incidentService.createIncident(
+    final mediaUrls =
+        await _storageService.uploadMultipleFiles(files, 'incidents');
+
+    final result = await _incidentService.createIncident(
       userId: userId,
       title: title,
       description: desc,
@@ -181,7 +193,43 @@ class _PublicIncidentsScreenState extends State<PublicIncidentsScreen> {
       mediaUrls: mediaUrls,
     );
 
-    _loadIncidents();
+    if (result != null) {
+      // Add a small delay to ensure database replication
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _loadIncidents();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Incident reported successfully!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.error, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Failed to submit incident'),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -192,7 +240,8 @@ class _PublicIncidentsScreenState extends State<PublicIncidentsScreen> {
       appBar: AppBar(
         title: Text(
           'Public Incidents',
-          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          style:
+              theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: 0,
@@ -204,7 +253,9 @@ class _PublicIncidentsScreenState extends State<PublicIncidentsScreen> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: theme.colorScheme.primary))
+          ? Center(
+              child:
+                  CircularProgressIndicator(color: theme.colorScheme.primary))
           : RefreshIndicator(
               onRefresh: _loadIncidents,
               child: _incidents.isEmpty
@@ -212,7 +263,10 @@ class _PublicIncidentsScreenState extends State<PublicIncidentsScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.public, size: 64, color: theme.colorScheme.onSurface.withValues(alpha: 0.3)),
+                          Icon(Icons.public,
+                              size: 64,
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.3)),
                           const SizedBox(height: 16),
                           Text(
                             'No incidents reported yet',
@@ -235,7 +289,8 @@ class _PublicIncidentsScreenState extends State<PublicIncidentsScreen> {
         onPressed: _showContributeDialog,
         backgroundColor: theme.colorScheme.primary,
         icon: Icon(Icons.add, color: theme.colorScheme.onPrimary),
-        label: Text('Contribute', style: TextStyle(color: theme.colorScheme.onPrimary)),
+        label: Text('Contribute',
+            style: TextStyle(color: theme.colorScheme.onPrimary)),
       ),
     );
   }
@@ -274,9 +329,29 @@ class _IncidentCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Icon(Icons.location_on, size: 16, color: theme.colorScheme.primary),
+                Icon(Icons.location_on,
+                    size: 16, color: theme.colorScheme.primary),
               ],
             ),
+            if (incident.locationAddress != null) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.place, size: 14, color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      incident.locationAddress!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 8),
             Text(
               incident.description,
@@ -291,10 +366,64 @@ class _IncidentCard extends StatelessWidget {
                   Icon(Icons.image, size: 16, color: theme.colorScheme.primary),
                   const SizedBox(width: 4),
                   Text(
-                    '${incident.mediaUrls.length} attachment(s)',
+                    '${incident.mediaUrls.length} image(s)',
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 80,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: incident.mediaUrls.length,
+                  itemBuilder: (context, index) {
+                    final imageUrl = incident.mediaUrls[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: () => _showFullScreenImage(context, imageUrl),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Center(
+                                  child: CircularProgressIndicator(
+                                    value: loadingProgress.expectedTotalBytes != null
+                                        ? loadingProgress.cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                        : null,
+                                    strokeWidth: 2,
+                                  ),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: theme.colorScheme.errorContainer,
+                                  child: Icon(
+                                    Icons.broken_image,
+                                    color: theme.colorScheme.onErrorContainer,
+                                    size: 24,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
             ],
             const SizedBox(height: 12),
@@ -302,7 +431,7 @@ class _IncidentCard extends StatelessWidget {
               children: [
                 IconButton(
                   onPressed: () async {
-                    final userId = SupabaseService.auth.currentUser?.id;
+                    final userId = SupabaseService.client.auth.currentUser?.id;
                     if (userId != null) {
                       await incidentService.upvoteIncident(incident.id, userId);
                       onVote();
@@ -315,9 +444,10 @@ class _IncidentCard extends StatelessWidget {
                 const SizedBox(width: 16),
                 IconButton(
                   onPressed: () async {
-                    final userId = SupabaseService.auth.currentUser?.id;
+                    final userId = SupabaseService.client.auth.currentUser?.id;
                     if (userId != null) {
-                      await incidentService.downvoteIncident(incident.id, userId);
+                      await incidentService.downvoteIncident(
+                          incident.id, userId);
                       onVote();
                     }
                   },
@@ -348,5 +478,80 @@ class _IncidentCard extends StatelessWidget {
     if (diff.inHours > 0) return '${diff.inHours}h ago';
     if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
     return 'Just now';
+  }
+
+  void _showFullScreenImage(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                            : null,
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.broken_image,
+                            size: 64,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Failed to load image',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            Positioned(
+              top: 40,
+              right: 20,
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

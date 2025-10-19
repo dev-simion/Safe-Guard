@@ -69,4 +69,38 @@ class StorageService {
       return null;
     }
   }
+
+  /// Get public URL for a file in storage
+  String getPublicUrl(String path) {
+    return SupabaseService.client.storage
+        .from(_bucketName)
+        .getPublicUrl(path);
+  }
+
+  /// List all files in a folder
+  Future<List<String>> listFiles(String folder) async {
+    try {
+      final response = await SupabaseService.client.storage
+          .from(_bucketName)
+          .list(path: folder);
+      
+      return response.map((file) => '$folder/${file.name}').toList();
+    } catch (e) {
+      print('❌ Failed to list files: $e');
+      return [];
+    }
+  }
+
+  /// Delete a file from storage
+  Future<bool> deleteFile(String path) async {
+    try {
+      await SupabaseService.client.storage
+          .from(_bucketName)
+          .remove([path]);
+      return true;
+    } catch (e) {
+      print('❌ Failed to delete file: $e');
+      return false;
+    }
+  }
 }

@@ -171,7 +171,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'AI Counselor',
+                  'Trauma Support',
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 Text(
@@ -283,7 +283,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: Icon(Icons.send, color: theme.colorScheme.onPrimary),
+                      icon: Icon(Icons.arrow_upward_rounded, color: theme.colorScheme.onPrimary),
                       onPressed: _sendMessage,
                     ),
                   ),
