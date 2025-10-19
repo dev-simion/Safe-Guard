@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:guardian_shield/models/emergency_alert.dart';
 import 'package:guardian_shield/services/alert_service.dart';
 import 'package:guardian_shield/services/location_service.dart';
-import 'package:guardian_shield/services/sms_service.dart';
 import 'package:guardian_shield/supabase/supabase_config.dart';
-import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:async';
 
 class SOSScreen extends StatefulWidget {
   const SOSScreen({super.key});
@@ -16,129 +17,233 @@ class SOSScreen extends StatefulWidget {
 class _SOSScreenState extends State<SOSScreen> {
   final _alertService = AlertService();
   bool _isProcessing = false;
+  bool _isSharingLocation = false;
+  Position? _currentPosition;
+  StreamSubscription<Position>? _locationSubscription;
+  String _locationDetails = '';
 
-  Future<void> _makeEmergencyCall(String number) async {
-    try {
-      await FlutterPhoneDirectCaller.callNumber(number);
-    } catch (e) {
-      _showError('Unable to make call: $e');
-    }
+  @override
+  void initState() {
+    super.initState();
+    _getCurrentLocation();
   }
 
-  Future<void> _triggerSOS({
-    required AlertType type,
-    bool isSilent = false,
-    String? phoneNumber,
-  }) async {
-    if (_isProcessing) return;
-
-    final userId = SupabaseConfig.auth.currentUser?.id;
-    if (userId == null) {
-      _showError('You must be signed in to send an alert.');
-      return;
-    }
-
-    setState(() => _isProcessing = true);
-
+  Future<void> _getCurrentLocation() async {
     final position = await LocationService.getCurrentLocation();
-    if (position == null) {
-      _showError('Unable to get location. Please enable location services.');
-      setState(() => _isProcessing = false);
-      return;
-    }
-
-    // Make phone call if number is provided
-    if (phoneNumber != null) {
-      await _makeEmergencyCall(phoneNumber);
-    }
-
-    final alert = await _alertService.createAlert(
-      userId: userId,
-      type: type,
-      latitude: position.latitude,
-      longitude: position.longitude,
-      isSilent: isSilent,
-    );
-
-    setState(() => _isProcessing = false);
-
-    if (alert != null) {
-      _showSuccess('Emergency alert sent! Help is on the way.');
-    } else {
-      _showError('Failed to send alert. Please try again.');
+    if (position != null && mounted) {
+      setState(() {
+        _currentPosition = position;
+        _updateLocationDetails(position);
+      });
     }
   }
 
-  Future<void> _notifyFamily() async {
-    if (_isProcessing) return;
+  void _updateLocationDetails(Position position) {
+    setState(() {
+      _locationDetails = 'Lat: ${position.latitude.toStringAsFixed(6)}, '
+          'Lng: ${position.longitude.toStringAsFixed(6)}\n'
+          'Accuracy: ${position.accuracy.toStringAsFixed(1)}m\n'
+          'Speed: ${position.speed.toStringAsFixed(1)} m/s\n'
+          'Altitude: ${position.altitude.toStringAsFixed(1)}m';
+    });
+  }
 
-    final userId = SupabaseConfig.auth.currentUser?.id;
-    if (userId == null) {
-      _showError('You must be signed in to notify family.');
+  Future<void> _shareLocation() async {
+    if (_currentPosition == null) {
+      _showError('Unable to get location. Please enable location services.');
       return;
     }
+
+    final latitude = _currentPosition!.latitude;
+    final longitude = _currentPosition!.longitude;
+    final googleMapsUrl = 'https://www.google.com/maps?q=$latitude,$longitude';
+    final appleMapsUrl = 'https://maps.apple.com/?q=$latitude,$longitude';
+    
+    final message = '''
+🚨 EMERGENCY - I NEED HELP! 🚨
+
+📍 My Current Location:
+$googleMapsUrl
+
+Alternative (Apple Maps):
+$appleMapsUrl
+
+Coordinates:
+Latitude: $latitude
+Longitude: $longitude
+
+Accuracy: ${_currentPosition!.accuracy.toStringAsFixed(1)}m
+Timestamp: ${DateTime.now().toString()}
+
+$_locationDetails
+
+This is an automated emergency alert from SafeGuard App.
+''';
+
+    try {
+      await Share.share(
+        message,
+        subject: '🚨 EMERGENCY ALERT - Location Share',
+      );
+      _showSuccess('Location shared successfully!');
+    } catch (e) {
+      _showError('Failed to share location: $e');
+    }
+  }
+
+  Future<void> _toggleLocationSharing() async {
+    if (_isSharingLocation) {
+      // Stop sharing
+      _stopLocationSharing();
+    } else {
+      // Start sharing
+      await _startLocationSharing();
+    }
+  }
+
+  Future<void> _startLocationSharing() async {
+    if (_isProcessing) return;
 
     setState(() => _isProcessing = true);
 
     try {
-      // Fetch user's data including emergency contact and name
-      final response = await SupabaseConfig.client
-          .from('users')
-          .select('emergency_contacts, full_name')
-          .eq('id', userId)
-          .single();
-
-      final emergencyContacts = response['emergency_contacts'] as String?;
-      final userName = response['full_name'] as String? ?? 'User';
-
-      if (emergencyContacts == null || emergencyContacts.isEmpty) {
-        _showError('No emergency contact set. Please add one in settings.');
+      // Check and request permissions
+      final hasPermission = await LocationService.requestPermissions();
+      if (!hasPermission) {
+        _showError('Location permission denied. Please grant permission.');
         setState(() => _isProcessing = false);
         return;
       }
 
-      // Get location
+      // Check if location services are enabled
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showError('Location services are disabled. Please enable them.');
+        setState(() => _isProcessing = false);
+        return;
+      }
+
+      // Get current location first
+      await _getCurrentLocation();
+
+      if (_currentPosition == null) {
+        _showError('Unable to get your location. Please try again.');
+        setState(() => _isProcessing = false);
+        return;
+      }
+
+      // Share initial location
+      await _shareLocation();
+
+      // Start tracking and sharing updates
+      _locationSubscription = LocationService.getLocationStream().listen(
+        (position) {
+          if (mounted) {
+            setState(() {
+              _currentPosition = position;
+              _updateLocationDetails(position);
+            });
+          }
+        },
+        onError: (error) {
+          print('Location tracking error: $error');
+          _stopLocationSharing();
+        },
+      );
+
+      // Create alert in database
+      final userId = SupabaseConfig.auth.currentUser?.id;
+      if (userId != null) {
+        await _alertService.createAlert(
+          userId: userId,
+          type: AlertType.general,
+          latitude: _currentPosition!.latitude,
+          longitude: _currentPosition!.longitude,
+          isSilent: false,
+          notes: 'Live location sharing started',
+        );
+      }
+
+      setState(() {
+        _isSharingLocation = true;
+        _isProcessing = false;
+      });
+
+      _showSuccess('Live location sharing started!');
+    } catch (e) {
+      setState(() => _isProcessing = false);
+      _showError('Error starting location sharing: $e');
+    }
+  }
+
+  void _stopLocationSharing() {
+    _locationSubscription?.cancel();
+    _locationSubscription = null;
+    
+    setState(() {
+      _isSharingLocation = false;
+    });
+
+    _showSuccess('Location sharing stopped');
+  }
+
+  Future<void> _quickShare(AlertType type, String label) async {
+    if (_isProcessing) return;
+
+    setState(() => _isProcessing = true);
+
+    try {
+      final hasPermission = await LocationService.requestPermissions();
+      if (!hasPermission) {
+        _showError('Location permission denied.');
+        setState(() => _isProcessing = false);
+        return;
+      }
+
       final position = await LocationService.getCurrentLocation();
       if (position == null) {
-        _showError('Unable to get location. Please enable location services.');
+        _showError('Unable to get location.');
         setState(() => _isProcessing = false);
         return;
       }
 
-      // Create silent alert
-      final alert = await _alertService.createAlert(
-        userId: userId,
-        type: AlertType.general,
-        latitude: position.latitude,
-        longitude: position.longitude,
-        isSilent: true,
-        notes: 'Family notification alert',
-      );
+      setState(() {
+        _currentPosition = position;
+        _updateLocationDetails(position);
+      });
 
-      // Format and send SMS to emergency contact
-      final message = SmsService.formatEmergencyMessage(
-        userName: userName,
-        latitude: position.latitude,
-        longitude: position.longitude,
-      );
+      final googleMapsUrl = 'https://www.google.com/maps?q=${position.latitude},${position.longitude}';
+      
+      final message = '''
+🚨 EMERGENCY: $label 🚨
 
-      final smsSent = await SmsService.sendEmergencySMS(
-        emergencyContacts,
-        message,
-      );
+📍 My Location: $googleMapsUrl
+
+Coordinates: ${position.latitude}, ${position.longitude}
+
+Sent from SafeGuard App at ${DateTime.now().toString()}
+''';
+
+      await Share.share(message, subject: '🚨 $label - Emergency Alert');
+
+      // Create alert in database
+      final userId = SupabaseConfig.auth.currentUser?.id;
+      if (userId != null) {
+        await _alertService.createAlert(
+          userId: userId,
+          type: type,
+          latitude: position.latitude,
+          longitude: position.longitude,
+          isSilent: false,
+          notes: label,
+        );
+      }
 
       setState(() => _isProcessing = false);
-
-      if (alert != null && smsSent) {
-        _showSuccess('Family has been notified with your location via SMS.');
-      } else if (alert != null && !smsSent) {
-        _showSuccess('Alert created but SMS failed. Please check SMS permissions.');
-      } else {
-        _showError('Failed to notify family. Please try again.');
-      }
+      _showSuccess('Emergency alert shared!');
     } catch (e) {
       setState(() => _isProcessing = false);
-      _showError('Error notifying family: $e');
+      _showError('Failed to share: $e');
     }
   }
 
@@ -175,7 +280,7 @@ class _SOSScreenState extends State<SOSScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const SizedBox(width: 48), // Spacer for centering
+                  const SizedBox(width: 48),
                   Expanded(
                     child: Column(
                       children: [
@@ -187,7 +292,7 @@ class _SOSScreenState extends State<SOSScreen> {
                           ),
                         ),
                         Text(
-                          'Emergency Alert System',
+                          'Emergency Location Sharing',
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: theme.colorScheme.onSurface.withOpacity(0.7),
                           ),
@@ -203,47 +308,47 @@ class _SOSScreenState extends State<SOSScreen> {
                           color: theme.colorScheme.primary,
                           size: 28,
                         ),
-                        Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            constraints: const BoxConstraints(
-                              minWidth: 12,
-                              minHeight: 12,
+                        if (_isSharingLocation)
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 12,
+                                minHeight: 12,
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                     onPressed: () {
-                      // Navigate to notifications screen
-                      // Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationsScreen()));
+                      // Navigate to notifications
                     },
                   ),
                 ],
               ),
               const SizedBox(height: 40),
               
-              // Main SOS Button
+              // Main SOS Button - Now for location sharing
               GestureDetector(
-                onTap: () => _triggerSOS(
-                  type: AlertType.general,
-                  phoneNumber: '911',
-                ),
+                onTap: _toggleLocationSharing,
                 child: Container(
                   width: 220,
                   height: 220,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: theme.colorScheme.primary,
+                    color: _isSharingLocation 
+                        ? Colors.green 
+                        : theme.colorScheme.primary,
                     boxShadow: [
                       BoxShadow(
-                        color: theme.colorScheme.primary.withOpacity(0.4),
+                        color: (_isSharingLocation ? Colors.green : theme.colorScheme.primary)
+                            .withOpacity(0.4),
                         blurRadius: 30,
                         spreadRadius: 5,
                       ),
@@ -253,20 +358,24 @@ class _SOSScreenState extends State<SOSScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        Icons.emergency,
+                        _isSharingLocation 
+                            ? Icons.stop_circle 
+                            : Icons.share_location,
                         size: 80,
                         color: theme.colorScheme.onPrimary,
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'SOS',
+                        _isSharingLocation ? 'STOP' : 'SHARE',
                         style: theme.textTheme.headlineLarge?.copyWith(
                           color: theme.colorScheme.onPrimary,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       Text(
-                        'TAP FOR HELP',
+                        _isSharingLocation 
+                            ? 'SHARING LOCATION' 
+                            : 'LIVE LOCATION',
                         style: theme.textTheme.labelMedium?.copyWith(
                           color: theme.colorScheme.onPrimary,
                           letterSpacing: 1.5,
@@ -276,50 +385,87 @@ class _SOSScreenState extends State<SOSScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 60),
               
-              // Quick Actions Title
+              // Location info card
+              if (_currentPosition != null) ...[
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _isSharingLocation 
+                                ? Icons.gps_fixed 
+                                : Icons.gps_not_fixed,
+                            color: _isSharingLocation 
+                                ? Colors.green 
+                                : theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _isSharingLocation 
+                                  ? 'Location tracking active' 
+                                  : 'Location ready',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _locationDetails,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              
+              const SizedBox(height: 40),
+              
+              // Quick Actions
               Text(
-                'Quick Actions',
+                'Quick Share',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 24),
               
-              // Quick Action Buttons
               _QuickActionButton(
                 icon: Icons.local_police,
-                label: 'Need Police',
+                label: 'Share - Need Police',
                 emoji: '🚓',
-                onTap: () => _triggerSOS(
-                  type: AlertType.police,
-                  phoneNumber: '911',
-                ),
+                onTap: () => _quickShare(AlertType.police, 'Need Police'),
                 theme: theme,
               ),
               const SizedBox(height: 16),
               _QuickActionButton(
                 icon: Icons.local_hospital,
-                label: 'Need Ambulance',
+                label: 'Share - Need Ambulance',
                 emoji: '🚑',
-                onTap: () => _triggerSOS(
-                  type: AlertType.ambulance,
-                  phoneNumber: '211',
-                ),
+                onTap: () => _quickShare(AlertType.ambulance, 'Need Ambulance'),
                 theme: theme,
               ),
               const SizedBox(height: 16),
               _QuickActionButton(
                 icon: Icons.family_restroom,
-                label: 'Notify Family',
+                label: 'Share with Family',
                 emoji: '👨‍👩‍👧‍👦',
-                onTap: _notifyFamily,
+                onTap: () => _quickShare(AlertType.general, 'Emergency - Family Alert'),
                 theme: theme,
               ),
               const SizedBox(height: 32),
               
-              // Loading Indicator
               if (_isProcessing)
                 CircularProgressIndicator(color: theme.colorScheme.primary),
             ],
@@ -327,6 +473,12 @@ class _SOSScreenState extends State<SOSScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _locationSubscription?.cancel();
+    super.dispose();
   }
 }
 
