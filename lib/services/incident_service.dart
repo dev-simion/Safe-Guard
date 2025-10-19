@@ -1,10 +1,8 @@
 import 'package:guardian_shield/models/public_incident.dart';
 import 'package:guardian_shield/services/supabase_service.dart';
-import 'package:uuid/uuid.dart';
+import 'package:guardian_shield/services/location_service.dart';
 
 class IncidentService {
-  static const _uuid = Uuid();
-
   Future<PublicIncident?> createIncident({
     required String userId,
     required String title,
@@ -15,25 +13,43 @@ class IncidentService {
     List<String> mediaUrls = const [],
   }) async {
     try {
-      final incident = PublicIncident(
-        id: _uuid.v4(),
-        userId: userId,
-        title: title,
-        description: description,
-        latitude: latitude,
-        longitude: longitude,
-        locationAddress: locationAddress,
-        mediaUrls: mediaUrls,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
+      // Resolve location address if not provided
+      String? resolvedAddress = locationAddress;
+      if (resolvedAddress == null) {
+        resolvedAddress = await LocationService.getAddressFromCoordinates(latitude, longitude);
+      }
 
-      await SupabaseService.client
+      // Create incident data without ID (let Supabase generate it)
+      final incidentData = {
+        'user_id': userId,
+        'title': title,
+        'description': description,
+        'latitude': latitude,
+        'longitude': longitude,
+        'location_address': resolvedAddress,
+        'media_urls': mediaUrls,
+        'upvotes': 0,
+        'downvotes': 0,
+        'upvoted_by': <String>[],
+        'downvoted_by': <String>[],
+      };
+
+      print('🛰 Inserting incident into Supabase...');
+      print(incidentData);
+
+      final response = await SupabaseService.client
           .from('public_incidents')
-          .insert(incident.toJson());
+          .insert(incidentData)
+          .select()
+          .single(); // Add .single() to get the inserted record
 
-      return incident;
-    } catch (e) {
+      print('✅ Insert response: $response');
+
+      // Return the incident from the database response
+      return PublicIncident.fromJson(response);
+    } catch (e, stack) {
+      print('❌ Failed to insert incident: $e');
+      print(stack);
       return null;
     }
   }
@@ -45,10 +61,14 @@ class IncidentService {
           .select()
           .order('created_at', ascending: false);
 
+      print('📋 Fetched ${response.length} incidents');
+
       return (response as List)
           .map((json) => PublicIncident.fromJson(json))
           .toList();
-    } catch (e) {
+    } catch (e, stack) {
+      print('❌ Failed to fetch incidents: $e');
+      print(stack);
       return [];
     }
   }
@@ -71,19 +91,17 @@ class IncidentService {
         upvotedBy.add(userId);
       }
 
-      await SupabaseService.client
-          .from('public_incidents')
-          .update({
-            'upvotes': upvotedBy.length,
-            'downvotes': downvotedBy.length,
-            'upvoted_by': upvotedBy,
-            'downvoted_by': downvotedBy,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', incidentId);
+      await SupabaseService.client.from('public_incidents').update({
+        'upvotes': upvotedBy.length,
+        'downvotes': downvotedBy.length,
+        'upvoted_by': upvotedBy,
+        'downvoted_by': downvotedBy,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', incidentId);
 
       return true;
     } catch (e) {
+      print('❌ Failed to upvote: $e');
       return false;
     }
   }
@@ -106,19 +124,17 @@ class IncidentService {
         downvotedBy.add(userId);
       }
 
-      await SupabaseService.client
-          .from('public_incidents')
-          .update({
-            'upvotes': upvotedBy.length,
-            'downvotes': downvotedBy.length,
-            'upvoted_by': upvotedBy,
-            'downvoted_by': downvotedBy,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', incidentId);
+      await SupabaseService.client.from('public_incidents').update({
+        'upvotes': upvotedBy.length,
+        'downvotes': downvotedBy.length,
+        'upvoted_by': upvotedBy,
+        'downvoted_by': downvotedBy,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', incidentId);
 
       return true;
     } catch (e) {
+      print('❌ Failed to downvote: $e');
       return false;
     }
   }
@@ -133,6 +149,7 @@ class IncidentService {
 
       return PublicIncident.fromJson(response);
     } catch (e) {
+      print('❌ Failed to get incident: $e');
       return null;
     }
   }

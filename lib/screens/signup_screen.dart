@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:guardian_shield/auth/supabase_auth_manager.dart';
 import 'package:guardian_shield/screens/main_screen.dart';
 
+// Authentication Screen
+
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
 

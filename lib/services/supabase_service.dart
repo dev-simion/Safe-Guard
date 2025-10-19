@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:guardian_shield/models/chat_message.dart';
 import 'package:flutter/foundation.dart';
 
+// Public Safe Anon Key. Safe to Store on Client Side. RLS enabled in database. -- Supabase SDK.
 class SupabaseService {
   static const String supabaseUrl = 'https://xyipwzrftoipayfxrmcy.supabase.co';
   static const String anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5aXB3enJmdG9pcGF5ZnhybWN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA3Mzg3MjcsImV4cCI6MjA3NjMxNDcyN30.aGj7zXs490ViP6VK0tP3hFhEkxgmEEFQ8VuWbJA2SjQ';
