@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:guardian_shield/models/emergency_alert.dart';
 import 'package:guardian_shield/services/alert_service.dart';
 import 'package:guardian_shield/services/location_service.dart';
-import 'package:guardian_shield/supabase/supabase_config.dart';
+import 'package:guardian_shield/services/supabase_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
@@ -152,7 +152,7 @@ This is an automated emergency alert from SafeGuard App.
       );
 
       // Create alert in database
-      final userId = SupabaseConfig.auth.currentUser?.id;
+      final userId = SupabaseService.auth.currentUser?.id;
       if (userId != null) {
         await _alertService.createAlert(
           userId: userId,
@@ -227,7 +227,7 @@ Sent from SafeGuard App at ${DateTime.now().toString()}
       await Share.share(message, subject: '🚨 $label - Emergency Alert');
 
       // Create alert in database
-      final userId = SupabaseConfig.auth.currentUser?.id;
+      final userId = SupabaseService.auth.currentUser?.id;
       if (userId != null) {
         await _alertService.createAlert(
           userId: userId,

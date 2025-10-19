@@ -1,8 +1,9 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'supabase_service.dart';
+import '../supabase/supabase_config.dart'; // Changed from 'supabase_service.dart'
 
 class UserService {
-  static final SupabaseClient _client = SupabaseService.client;
+  static SupabaseClient get _client =>
+      SupabaseConfig.client; // Use SupabaseConfig
 
   // Get current user profile
   static Future<Map<String, dynamic>?> getUserProfile() async {
@@ -10,15 +11,14 @@ class UserService {
       final user = _client.auth.currentUser;
       if (user == null) return null;
 
-      final response = await _client
-          .from('users')
-          .select()
-          .eq('id', user.id)
-          .maybeSingle();
+      final response =
+          await _client.from('users').select().eq('id', user.id).maybeSingle();
 
       // If no profile exists, create one
       if (response == null) {
-        await _ensureUserProfileExists();
+        final created = await _ensureUserProfileExists();
+        if (!created) return null;
+
         // Try to fetch again after creating
         final newResponse = await _client
             .from('users')
@@ -31,7 +31,7 @@ class UserService {
       return response;
     } catch (e) {
       print('Error fetching user profile: $e');
-      return null;
+      rethrow; // Rethrow to see actual error
     }
   }
 
@@ -39,20 +39,38 @@ class UserService {
   static Future<bool> _ensureUserProfileExists() async {
     try {
       final user = _client.auth.currentUser;
-      if (user == null) return false;
+      if (user == null) {
+        print('No user found in _ensureUserProfileExists');
+        return false;
+      }
+
+      // Check if profile already exists
+      final existing = await _client
+          .from('users')
+          .select('id')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (existing != null) {
+        print('User profile already exists');
+        return true;
+      }
 
       final data = {
         'id': user.id,
         'email': user.email ?? '',
         'full_name': user.userMetadata?['full_name'] ?? 'User',
-        'emergency_contacts': <Map<String, String>>[],
+        'emergency_contacts': [], // Empty JSON array
         'medical_info': '',
       };
 
-      await _client.from('users').upsert(data);
+      print('Creating user profile with data: $data');
+      await _client.from('users').insert(data);
+      print('User profile created successfully');
       return true;
     } catch (e) {
       print('Error ensuring user profile exists: $e');
+      print('Error details: ${e.toString()}');
       return false;
     }
   }
@@ -74,7 +92,10 @@ class UserService {
         'email': email,
         'full_name': fullName,
         if (phoneNumber != null) 'phone_number': phoneNumber,
-        if (emergencyContacts != null) 'emergency_contacts': emergencyContacts,
+        if (emergencyContacts != null)
+          'emergency_contacts': emergencyContacts
+              .map((c) => Map<String, dynamic>.from(c))
+              .toList(),
         if (medicalInfo != null) 'medical_info': medicalInfo,
       };
 
@@ -87,7 +108,8 @@ class UserService {
   }
 
   // Update emergency contacts
-  static Future<bool> updateEmergencyContacts(List<Map<String, String>> contacts) async {
+  static Future<bool> updateEmergencyContacts(
+      List<Map<String, String>> contacts) async {
     try {
       final user = _client.auth.currentUser;
       if (user == null) {
@@ -95,19 +117,46 @@ class UserService {
         return false;
       }
 
+      print('Updating emergency contacts for user: ${user.id}');
+      print('Contacts to update: $contacts');
+
       // Ensure user profile exists first
-      await _ensureUserProfileExists();
+      final profileExists = await _ensureUserProfileExists();
+      if (!profileExists) {
+        print('Failed to ensure user profile exists');
+        return false;
+      }
+
+      // Convert to proper JSON format
+      final contactsJson = contacts.map((contact) {
+        return {
+          'name': contact['name'] ?? '',
+          'phone': contact['phone'] ?? '',
+          'relationship': contact['relationship'] ?? '',
+        };
+      }).toList();
+
+      print('Converted contacts JSON: $contactsJson');
 
       final result = await _client
           .from('users')
-          .update({'emergency_contacts': contacts})
+          .update({'emergency_contacts': contactsJson})
           .eq('id', user.id)
           .select();
 
       print('Emergency contacts update result: $result');
+
+      if (result.isEmpty) {
+        print(
+            'Update returned empty result - this might indicate no rows were updated');
+        return false;
+      }
+
       return true;
     } catch (e) {
       print('Error updating emergency contacts: $e');
+      print('Error type: ${e.runtimeType}');
+      print('Stack trace: ${StackTrace.current}');
       return false;
     }
   }
@@ -122,7 +171,11 @@ class UserService {
       }
 
       // Ensure user profile exists first
-      await _ensureUserProfileExists();
+      final profileExists = await _ensureUserProfileExists();
+      if (!profileExists) {
+        print('Failed to ensure user profile exists');
+        return false;
+      }
 
       final result = await _client
           .from('users')
@@ -131,7 +184,7 @@ class UserService {
           .select();
 
       print('Medical info update result: $result');
-      return true;
+      return result.isNotEmpty;
     } catch (e) {
       print('Error updating medical info: $e');
       return false;
@@ -148,7 +201,11 @@ class UserService {
       }
 
       // Ensure user profile exists first
-      await _ensureUserProfileExists();
+      final profileExists = await _ensureUserProfileExists();
+      if (!profileExists) {
+        print('Failed to ensure user profile exists');
+        return false;
+      }
 
       final result = await _client
           .from('users')
@@ -157,7 +214,7 @@ class UserService {
           .select();
 
       print('Phone number update result: $result');
-      return true;
+      return result.isNotEmpty;
     } catch (e) {
       print('Error updating phone number: $e');
       return false;
@@ -178,15 +235,15 @@ class UserService {
       }
 
       final updateData = <String, dynamic>{};
-      
+
       if (clearEmergencyContacts) {
-        updateData['emergency_contacts'] = <Map<String, String>>[];
+        updateData['emergency_contacts'] = [];
       }
-      
+
       if (clearMedicalInfo) {
         updateData['medical_info'] = '';
       }
-      
+
       if (clearPhoneNumber) {
         updateData['phone_number'] = null;
       }
@@ -200,7 +257,7 @@ class UserService {
           .select();
 
       print('Clear user data result: $result');
-      return true;
+      return result.isNotEmpty;
     } catch (e) {
       print('Error clearing user data: $e');
       return false;
@@ -217,7 +274,11 @@ class UserService {
       }
 
       // Ensure user profile exists first
-      await _ensureUserProfileExists();
+      final profileExists = await _ensureUserProfileExists();
+      if (!profileExists) {
+        print('Failed to ensure user profile exists');
+        return false;
+      }
 
       final result = await _client
           .from('users')
@@ -226,7 +287,7 @@ class UserService {
           .select();
 
       print('Full name update result: $result');
-      return true;
+      return result.isNotEmpty;
     } catch (e) {
       print('Error updating full name: $e');
       return false;

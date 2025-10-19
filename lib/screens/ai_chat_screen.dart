@@ -1,40 +1,81 @@
 import 'package:flutter/material.dart';
 import 'package:guardian_shield/models/chat_message.dart';
-import 'package:guardian_shield/openai/openai_config.dart';
+import 'package:guardian_shield/services/ai_chat_service.dart';
+import 'package:guardian_shield/services/supabase_service.dart';
 import 'package:uuid/uuid.dart';
 
 class AIChatScreen extends StatefulWidget {
-  const AIChatScreen({super.key});
+  final String? conversationId;
+
+  const AIChatScreen({super.key, this.conversationId});
 
   @override
   State<AIChatScreen> createState() => _AIChatScreenState();
 }
 
 class _AIChatScreenState extends State<AIChatScreen> {
-  final _openAIService = OpenAIService();
+  final _aiChatService = AIChatService();
+  final _supabaseService = SupabaseService();
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
+  late String _conversationId;
   static const _uuid = Uuid();
 
   @override
   void initState() {
     super.initState();
-    _addMessage(
-      'Hello! I\'m here to provide support and guidance. Whether you\'ve experienced an emergency or just need someone to talk to, I\'m here to listen and help. How are you feeling today?',
-      MessageRole.assistant,
-    );
+    _conversationId = widget.conversationId ?? _uuid.v4();
+    _loadConversationHistory();
+    
+    if (_messages.isEmpty) {
+      _addMessage(
+        'Hello! I\'m here to provide support and guidance. Whether you\'ve experienced an emergency or just need someone to talk to, I\'m here to listen and help. How are you feeling today?',
+        MessageRole.assistant,
+        isInitial: true,
+      );
+    }
   }
 
-  void _addMessage(String content, MessageRole role) {
+  Future<void> _loadConversationHistory() async {
+    try {
+      final messages = await _supabaseService.getConversationMessages(_conversationId);
+      setState(() {
+        _messages.clear();
+        _messages.addAll(messages);
+      });
+      _scrollToBottom();
+    } catch (e) {
+      print('Error loading conversation: $e');
+    }
+  }
+
+  void _addMessage(String content, MessageRole role, {bool isInitial = false}) {
     setState(() {
       _messages.add(ChatMessage(
         id: _uuid.v4(),
         content: content,
         role: role,
         timestamp: DateTime.now(),
+        conversationId: _conversationId,
       ));
+    });
+    _scrollToBottom();
+  }
+
+  void _updateLastMessage(String content) {
+    setState(() {
+      if (_messages.isNotEmpty && _messages.last.role == MessageRole.assistant) {
+        final lastMessage = _messages.last;
+        _messages[_messages.length - 1] = ChatMessage(
+          id: lastMessage.id,
+          conversationId: lastMessage.conversationId,
+          content: lastMessage.content + content,
+          role: lastMessage.role,
+          timestamp: lastMessage.timestamp,
+        );
+      }
     });
     _scrollToBottom();
   }
@@ -56,22 +97,57 @@ class _AIChatScreenState extends State<AIChatScreen> {
     if (text.isEmpty || _isLoading) return;
 
     _messageController.clear();
+    
+    final userMessage = ChatMessage(
+      id: _uuid.v4(),
+      content: text,
+      role: MessageRole.user,
+      timestamp: DateTime.now(),
+      conversationId: _conversationId,
+    );
+    
     _addMessage(text, MessageRole.user);
+
+    // Save user message to database
+    await _supabaseService.saveMessage(userMessage);
 
     setState(() => _isLoading = true);
 
-    final response = await _openAIService.sendMessage(_messages);
+    // Add empty assistant message that will be filled with streaming content
+    _addMessage('', MessageRole.assistant);
+
+    try {
+      await _aiChatService.streamMessage(_messages, _conversationId, (chunk) {
+        _updateLastMessage(chunk);
+      });
+
+      // Save the complete AI response to database
+      final aiMessage = _messages.last;
+      await _supabaseService.saveMessage(aiMessage);
+
+    } catch (e) {
+      _updateLastMessage('\n\n[Error: Unable to get response. Please try again.]');
+    }
 
     setState(() => _isLoading = false);
+  }
 
-    if (response != null) {
-      _addMessage(response, MessageRole.assistant);
-    } else {
-      _addMessage(
-        'I apologize, but I\'m having trouble connecting right now. Please try again in a moment.',
-        MessageRole.assistant,
-      );
-    }
+  void _openChatHistory() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ChatHistoryScreen(
+          onSelectConversation: (conversationId) {
+            Navigator.pop(context);
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => AIChatScreen(conversationId: conversationId),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -110,19 +186,35 @@ class _AIChatScreenState extends State<AIChatScreen> {
         ),
         backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            onPressed: _openChatHistory,
+            tooltip: 'Chat History',
+          ),
+        ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(16),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) => _MessageBubble(
-                message: _messages[index],
-                theme: theme,
-              ),
-            ),
+            child: _messages.isEmpty
+                ? Center(
+                    child: Text(
+                      'Start a conversation',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) => _MessageBubble(
+                      message: _messages[index],
+                      theme: theme,
+                    ),
+                  ),
           ),
           if (_isLoading)
             Padding(
@@ -140,7 +232,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'Thinking...',
+                    'Streaming response...',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
@@ -266,5 +358,100 @@ class _MessageBubble extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class ChatHistoryScreen extends StatefulWidget {
+  final Function(String) onSelectConversation;
+
+  const ChatHistoryScreen({
+    super.key,
+    required this.onSelectConversation,
+  });
+
+  @override
+  State<ChatHistoryScreen> createState() => _ChatHistoryScreenState();
+}
+
+class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
+  final _supabaseService = SupabaseService();
+  late Future<List<Map<String, dynamic>>> _conversationsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _conversationsFuture = _supabaseService.getConversations();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Chat History',
+          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        elevation: 0,
+      ),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _conversationsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error: ${snapshot.error}'),
+            );
+          }
+
+          final conversations = snapshot.data ?? [];
+
+          if (conversations.isEmpty) {
+            return Center(
+              child: Text(
+                'No conversations yet',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: conversations.length,
+            itemBuilder: (context, index) {
+              final conv = conversations[index];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  leading: const Icon(Icons.chat),
+                  title: Text(conv['first_message'] ?? 'Conversation'),
+                  subtitle: Text(
+                    'Messages: ${conv['message_count']} • ${_formatDate(conv['created_at'])}',
+                  ),
+                  onTap: () => widget.onSelectConversation(conv['id']),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return 'Unknown';
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.month}/${date.day}/${date.year}';
+    } catch (e) {
+      return 'Unknown';
+    }
   }
 }

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import 'package:guardian_shield/auth/auth_manager.dart';
-import 'package:guardian_shield/supabase/supabase_config.dart';
+import 'package:guardian_shield/services/supabase_service.dart';
 import 'package:guardian_shield/models/user_profile.dart';
 
 class SupabaseAuthManager extends AuthManager with EmailSignInManager {
-  final _auth = SupabaseConfig.auth;
-  final _client = SupabaseConfig.client;
+  final _auth = SupabaseService.auth;
+  final _client = SupabaseService.client;
 
   @override
   supabase.User? get currentUser => _auth.currentUser;

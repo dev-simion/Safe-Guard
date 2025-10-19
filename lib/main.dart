@@ -3,11 +3,11 @@ import 'package:guardian_shield/theme.dart';
 import 'package:guardian_shield/screens/main_screen.dart';
 import 'package:guardian_shield/screens/login_screen.dart';
 import 'package:guardian_shield/services/theme_service.dart';
-import 'package:guardian_shield/supabase/supabase_config.dart';
+import 'package:guardian_shield/services/supabase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SupabaseConfig.initialize();
+  await SupabaseService.initialize();
   runApp(const MyApp());
 }
 
@@ -47,7 +47,7 @@ class _MyAppState extends State<MyApp> {
       darkTheme: darkTheme,
       themeMode: _themeService.themeMode,
       home: StreamBuilder(
-        stream: SupabaseConfig.auth.onAuthStateChange,
+        stream: SupabaseService.auth.onAuthStateChange,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(

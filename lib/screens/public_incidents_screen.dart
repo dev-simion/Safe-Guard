@@ -3,7 +3,7 @@ import 'package:guardian_shield/models/public_incident.dart';
 import 'package:guardian_shield/services/incident_service.dart';
 import 'package:guardian_shield/services/location_service.dart';
 import 'package:guardian_shield/services/storage_service.dart';
-import 'package:guardian_shield/supabase/supabase_config.dart';
+import 'package:guardian_shield/services/supabase_service.dart';
 import 'package:file_picker/file_picker.dart';
 
 class PublicIncidentsScreen extends StatefulWidget {
@@ -164,7 +164,7 @@ class _PublicIncidentsScreenState extends State<PublicIncidentsScreen> {
   }
 
   Future<void> _submitIncident(String title, String desc, List<PlatformFile> files) async {
-    final userId = SupabaseConfig.auth.currentUser?.id;
+    final userId = SupabaseService.auth.currentUser?.id;
     if (userId == null) return;
 
     final position = await LocationService.getCurrentLocation();
@@ -302,7 +302,7 @@ class _IncidentCard extends StatelessWidget {
               children: [
                 IconButton(
                   onPressed: () async {
-                    final userId = SupabaseConfig.auth.currentUser?.id;
+                    final userId = SupabaseService.auth.currentUser?.id;
                     if (userId != null) {
                       await incidentService.upvoteIncident(incident.id, userId);
                       onVote();
@@ -315,7 +315,7 @@ class _IncidentCard extends StatelessWidget {
                 const SizedBox(width: 16),
                 IconButton(
                   onPressed: () async {
-                    final userId = SupabaseConfig.auth.currentUser?.id;
+                    final userId = SupabaseService.auth.currentUser?.id;
                     if (userId != null) {
                       await incidentService.downvoteIncident(incident.id, userId);
                       onVote();

@@ -1,4 +1,4 @@
-import 'package:guardian_shield/supabase/supabase_config.dart';
+import 'package:guardian_shield/services/supabase_service.dart';
 import 'package:file_picker/file_picker.dart';
 
 class StorageService {
@@ -10,11 +10,11 @@ class StorageService {
       final path = '$folder/$fileName';
       final bytes = file.bytes!;
 
-      await SupabaseConfig.client.storage
+      await SupabaseService.client.storage
           .from(_bucketName)
           .uploadBinary(path, bytes);
 
-      final url = SupabaseConfig.client.storage
+      final url = SupabaseService.client.storage
           .from(_bucketName)
           .getPublicUrl(path);
 
