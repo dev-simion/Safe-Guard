@@ -150,9 +150,20 @@ class IncidentService {
       print('📋 Fetched ${response.length} incidents');
       print('📊 Raw response: $response');
 
-      return (response as List)
+      final incidents = (response as List)
           .map((json) => PublicIncident.fromJson(json))
           .toList();
+      
+      // Debug media URLs for each incident
+      for (int i = 0; i < incidents.length; i++) {
+        final incident = incidents[i];
+        print('📸 Incident ${i + 1}: "${incident.title}" has ${incident.mediaUrls.length} media URLs');
+        for (int j = 0; j < incident.mediaUrls.length; j++) {
+          print('   🔗 Media URL ${j + 1}: ${incident.mediaUrls[j]}');
+        }
+      }
+      
+      return incidents;
     } catch (e, stack) {
       print('❌ Failed to fetch incidents: $e');
       print('🔍 Error type: ${e.runtimeType}');

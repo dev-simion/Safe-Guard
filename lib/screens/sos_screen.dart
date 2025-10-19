@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:guardian_shield/models/emergency_alert.dart';
 import 'package:guardian_shield/services/alert_service.dart';
 import 'package:guardian_shield/services/location_service.dart';
+import 'package:guardian_shield/screens/public_incidents_screen.dart';
+import 'package:guardian_shield/services/incident_service.dart';
+import 'package:guardian_shield/screens/notifications_screen.dart';
 import 'package:guardian_shield/services/supabase_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_phone_direct_caller/flutter_phone_direct_caller.dart';
 import 'dart:async';
 
 // Main UI Screen. 
@@ -24,10 +29,22 @@ class _SOSScreenState extends State<SOSScreen> {
   StreamSubscription<Position>? _locationSubscription;
   String _locationDetails = '';
 
+  // For tracking new incidents
+  int _newIncidentCount = 0;
+
   @override
   void initState() {
     super.initState();
     _getCurrentLocation();
+    _checkNewIncidents();
+  }
+
+  Future<void> _checkNewIncidents() async {
+    final incidents = await IncidentService().getAllIncidents();
+    if (!mounted) return;
+    setState(() {
+      _newIncidentCount = incidents.length;
+    });
   }
 
   Future<void> _getCurrentLocation() async {
@@ -48,6 +65,19 @@ class _SOSScreenState extends State<SOSScreen> {
           'Speed: ${position.speed.toStringAsFixed(1)} m/s\n'
           'Altitude: ${position.altitude.toStringAsFixed(1)}m';
     });
+  }
+
+  Future<void> _triggerVibration() async {
+    try {
+      // Vibrate in a pattern: wait 0ms, vibrate 500ms, wait 200ms, vibrate 500ms
+      await HapticFeedback.vibrate();
+      await Future.delayed(const Duration(milliseconds: 200));
+      await HapticFeedback.vibrate();
+      await Future.delayed(const Duration(milliseconds: 200));
+      await HapticFeedback.vibrate();
+    } catch (e) {
+      print('Vibration error: $e');
+    }
   }
 
   Future<void> _shareLocation() async {
@@ -94,6 +124,9 @@ This is an automated emergency alert from SafeGuard App.
   }
 
   Future<void> _toggleLocationSharing() async {
+    // Trigger vibration when button is pressed
+    await _triggerVibration();
+    
     if (_isSharingLocation) {
       // Stop sharing
       _stopLocationSharing();
@@ -187,6 +220,50 @@ This is an automated emergency alert from SafeGuard App.
     });
 
     _showSuccess('Location sharing stopped');
+  }
+
+  Future<void> _makeEmergencyCall(String phoneNumber, AlertType type, String label) async {
+    if (_isProcessing) return;
+
+    setState(() => _isProcessing = true);
+
+    try {
+      // Get location for database logging
+      final hasPermission = await LocationService.requestPermissions();
+      Position? position;
+      
+      if (hasPermission) {
+        position = await LocationService.getCurrentLocation();
+        if (position != null && mounted) {
+          setState(() {
+            _currentPosition = position;
+            _updateLocationDetails(position!);
+          });
+        }
+      }
+
+      // Create alert in database
+      final userId = SupabaseService.auth.currentUser?.id;
+      if (userId != null && position != null) {
+        await _alertService.createAlert(
+          userId: userId,
+          type: type,
+          latitude: position.latitude,
+          longitude: position.longitude,
+          isSilent: false,
+          notes: '$label - Called $phoneNumber',
+        );
+      }
+
+      // Make the direct call
+      await FlutterPhoneDirectCaller.callNumber(phoneNumber);
+
+      setState(() => _isProcessing = false);
+      _showSuccess('Calling $label...');
+    } catch (e) {
+      setState(() => _isProcessing = false);
+      _showError('Failed to make call: $e');
+    }
   }
 
   Future<void> _quickShare(AlertType type, String label) async {
@@ -310,26 +387,56 @@ Sent from SafeGuard App at ${DateTime.now().toString()}
                           color: theme.colorScheme.primary,
                           size: 28,
                         ),
-                        if (_isSharingLocation)
+                        if (_newIncidentCount > 0)
                           Positioned(
                             right: 0,
                             top: 0,
                             child: Container(
                               padding: const EdgeInsets.all(2),
                               decoration: BoxDecoration(
-                                color: Colors.green,
+                                color: Colors.red,
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               constraints: const BoxConstraints(
                                 minWidth: 12,
                                 minHeight: 12,
                               ),
+                              child: Text(
+                                '$_newIncidentCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
                             ),
                           ),
                       ],
                     ),
-                    onPressed: () {
-                      // Navigate to notifications
+                    onPressed: () async {
+                      // Fetch latest incidents and navigate to notifications
+                      final incidents = await IncidentService().getAllIncidents();
+                      setState(() {
+                        _newIncidentCount = 0;
+                      });
+                      if (!mounted) return;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => NotificationsScreen(
+                            onPublicIncidentsTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const PublicIncidentsScreen(),
+                                ),
+                              );
+                            },
+                            newIncidents: incidents,
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ],
@@ -368,7 +475,7 @@ Sent from SafeGuard App at ${DateTime.now().toString()}
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        _isSharingLocation ? 'STOP' : 'SHARE',
+                        _isSharingLocation ? 'STOP' : 'SOS',
                         style: theme.textTheme.headlineLarge?.copyWith(
                           color: theme.colorScheme.onPrimary,
                           fontWeight: FontWeight.bold,
@@ -436,7 +543,7 @@ Sent from SafeGuard App at ${DateTime.now().toString()}
               
               // Quick Actions
               Text(
-                'Quick Share',
+                'Quick Emergency Actions',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -445,18 +552,20 @@ Sent from SafeGuard App at ${DateTime.now().toString()}
               
               _QuickActionButton(
                 icon: Icons.local_police,
-                label: 'Share - Need Police',
+                label: 'Call Police (911)',
                 emoji: '🚓',
-                onTap: () => _quickShare(AlertType.police, 'Need Police'),
+                onTap: () => _makeEmergencyCall('911', AlertType.police, 'Police'),
                 theme: theme,
+                isEmergencyCall: true,
               ),
               const SizedBox(height: 16),
               _QuickActionButton(
                 icon: Icons.local_hospital,
-                label: 'Share - Need Ambulance',
+                label: 'Call 211',
                 emoji: '🚑',
-                onTap: () => _quickShare(AlertType.ambulance, 'Need Ambulance'),
+                onTap: () => _makeEmergencyCall('211', AlertType.ambulance, '211 Service'),
                 theme: theme,
+                isEmergencyCall: true,
               ),
               const SizedBox(height: 16),
               _QuickActionButton(
@@ -490,6 +599,7 @@ class _QuickActionButton extends StatelessWidget {
   final String emoji;
   final VoidCallback onTap;
   final ThemeData theme;
+  final bool isEmergencyCall;
 
   const _QuickActionButton({
     required this.icon,
@@ -497,12 +607,15 @@ class _QuickActionButton extends StatelessWidget {
     required this.emoji,
     required this.onTap,
     required this.theme,
+    this.isEmergencyCall = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: theme.colorScheme.primary.withOpacity(0.1),
+      color: isEmergencyCall 
+          ? Colors.red.withOpacity(0.1)
+          : theme.colorScheme.primary.withOpacity(0.1),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -514,10 +627,16 @@ class _QuickActionButton extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.2),
+                  color: isEmergencyCall
+                      ? Colors.red.withOpacity(0.2)
+                      : theme.colorScheme.primary.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: theme.colorScheme.primary, size: 28),
+                child: Icon(
+                  icon, 
+                  color: isEmergencyCall ? Colors.red : theme.colorScheme.primary, 
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -525,6 +644,7 @@ class _QuickActionButton extends StatelessWidget {
                   label,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
+                    color: isEmergencyCall ? Colors.red.shade700 : null,
                   ),
                 ),
               ),

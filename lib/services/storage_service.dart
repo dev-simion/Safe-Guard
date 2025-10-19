@@ -2,7 +2,7 @@ import 'package:guardian_shield/services/supabase_service.dart';
 import 'package:file_picker/file_picker.dart';
 
 class StorageService {
-  static const String _bucketName = 'storage-server';
+  static const String _bucketName = 'storage-server'; // Keep as storage-server since it's working
 
   Future<String?> uploadFile(PlatformFile file, String folder) async {
     try {

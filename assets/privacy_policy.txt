@@ -1,0 +1,82 @@
+Privacy Policy for SafeZone App
+
+Effective Date: October 18, 2025
+
+Thank you for using SafeZone, a safety alert and reporting application
+developed to help students and community members quickly connect with
+local emergency services during distress or unsafe situations. Your
+privacy and security are extremely important to us.
+
+1. Information We Collect
+
+-   Personal Information: When you sign up, we may collect your name,
+    phone number, school name, and emergency contact details.
+-   Location Data: SafeZone collects location information when you
+    activate an SOS alert or when location sharing is enabled to provide
+    accurate assistance.
+-   Media (Photos, Videos, Audio): Users can upload photos or videos as
+    evidence of incidents. These files are securely uploaded and
+    encrypted.
+-   Device Information: We may collect device identifiers, operating
+    system version, and app usage data for performance improvement.
+
+2. How We Use Your Information
+
+-   To alert emergency services and designated contacts in real-time
+    during distress situations.
+-   To improve app performance, reliability, and safety.
+-   To generate anonymized data reports that help schools and
+    authorities understand and reduce bullying or unsafe activities.
+-   To provide customer support and respond to inquiries.
+
+3. How We Share Your Information
+
+-   With emergency responders, school administrators, or trusted
+    contacts when an SOS alert is triggered.
+-   With law enforcement authorities if legally required or for safety
+    purposes.
+-   We do not sell or rent your personal information to third parties.
+
+4. Data Security
+
+We use encryption and secure cloud storage to protect your personal
+data. Only authorized personnel and verified responders can access
+sensitive information.
+
+5. Data Retention
+
+We retain data only as long as necessary for safety, reporting, or legal
+compliance. You may request deletion of your account or data at any
+time.
+
+6. User Controls and Rights
+
+You can: - Request deletion of your data. - Update or correct your
+personal information. - Revoke permissions such as location or camera
+access.
+
+7. Permissions Used
+
+SafeZone requires the following permissions for functionality: -
+Internet access: For sending alerts and uploading data. - Location
+access: To pinpoint your location during emergencies. - Camera &
+Storage: For photo/video uploads as evidence. - Display over apps: For
+showing floating SOS button or alerts.
+
+8. Children’s Privacy
+
+SafeZone is designed for students and young users, but all users under
+18 should use the app under the guidance of a parent, guardian, or
+school authority.
+
+9. Changes to This Policy
+
+We may update this Privacy Policy periodically. Any major changes will
+be communicated through the app or our official website.
+
+10. Contact Us
+
+If you have any questions or concerns about this policy or your data,
+please contact us at: Email: support@safezoneapp.com
+
+By using the SafeZone app, you consent to this Privacy Policy.

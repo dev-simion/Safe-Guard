@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 class LocationTrackingScreen extends StatefulWidget {
   const LocationTrackingScreen({super.key});
@@ -54,22 +55,24 @@ class _LocationTrackingScreenState extends State<LocationTrackingScreen> {
         _errorMessage = '';
       });
 
-      final serviceEnabled = await LocationTrackingService.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        setState(() {
-          _errorMessage = 'Location services are disabled. Please enable them in settings.';
-          _isLoading = false;
-        });
-        return;
-      }
+      if (!kIsWeb) {
+        final serviceEnabled = await LocationTrackingService.isLocationServiceEnabled();
+        if (!serviceEnabled) {
+          setState(() {
+            _errorMessage = 'Location services are disabled. Please enable them in settings.';
+            _isLoading = false;
+          });
+          return;
+        }
 
-      final hasPermission = await LocationTrackingService.requestPermissions();
-      if (!hasPermission) {
-        setState(() {
-          _errorMessage = 'Location permission denied. Please grant permission in app settings.';
-          _isLoading = false;
-        });
-        return;
+        final hasPermission = await LocationTrackingService.requestPermissions();
+        if (!hasPermission) {
+          setState(() {
+            _errorMessage = 'Location permission denied. Please grant permission in app settings.';
+            _isLoading = false;
+          });
+          return;
+        }
       }
 
       await _getCurrentLocation();

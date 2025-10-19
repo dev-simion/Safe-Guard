@@ -31,22 +31,31 @@ class PublicIncident {
     required this.updatedAt,
   });
 
-  factory PublicIncident.fromJson(Map<String, dynamic> json) => PublicIncident(
-    id: json['id'],
-    userId: json['user_id'],
-    title: json['title'],
-    description: json['description'],
-    latitude: json['latitude'].toDouble(),
-    longitude: json['longitude'].toDouble(),
-    locationAddress: json['location_address'],
-    mediaUrls: List<String>.from(json['media_urls'] ?? []),
-    upvotes: json['upvotes'] ?? 0,
-    downvotes: json['downvotes'] ?? 0,
-    upvotedBy: List<String>.from(json['upvoted_by'] ?? []),
-    downvotedBy: List<String>.from(json['downvoted_by'] ?? []),
-    createdAt: DateTime.parse(json['created_at']),
-    updatedAt: DateTime.parse(json['updated_at']),
-  );
+  factory PublicIncident.fromJson(Map<String, dynamic> json) {
+    // Debug media URLs parsing
+    final rawMediaUrls = json['media_urls'];
+    print('🔍 Raw media_urls from DB: $rawMediaUrls (type: ${rawMediaUrls.runtimeType})');
+    
+    final mediaUrls = List<String>.from(rawMediaUrls ?? []);
+    print('🔍 Parsed media URLs: $mediaUrls');
+    
+    return PublicIncident(
+      id: json['id'],
+      userId: json['user_id'],
+      title: json['title'],
+      description: json['description'],
+      latitude: json['latitude'].toDouble(),
+      longitude: json['longitude'].toDouble(),
+      locationAddress: json['location_address'],
+      mediaUrls: mediaUrls,
+      upvotes: json['upvotes'] ?? 0,
+      downvotes: json['downvotes'] ?? 0,
+      upvotedBy: List<String>.from(json['upvoted_by'] ?? []),
+      downvotedBy: List<String>.from(json['downvoted_by'] ?? []),
+      createdAt: DateTime.parse(json['created_at']),
+      updatedAt: DateTime.parse(json['updated_at']),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,

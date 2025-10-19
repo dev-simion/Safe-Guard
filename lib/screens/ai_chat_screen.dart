@@ -171,11 +171,11 @@ class _AIChatScreenState extends State<AIChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Trauma Support',
+                  'Emergency Support',
                   style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  'Always here to support you',
+                  'Am always here to support you',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
@@ -200,7 +200,7 @@ class _AIChatScreenState extends State<AIChatScreen> {
             child: _messages.isEmpty
                 ? Center(
                     child: Text(
-                      'Start a conversation',
+                      'Am here to help. Start a conversation',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                       ),

@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:guardian_shield/models/public_incident.dart';
 import 'package:guardian_shield/services/incident_service.dart';
@@ -388,6 +389,7 @@ class _IncidentCard extends StatelessWidget {
                   itemCount: incident.mediaUrls.length,
                   itemBuilder: (context, index) {
                     final imageUrl = incident.mediaUrls[index];
+                    print('🖼️ Loading image URL: $imageUrl');
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: GestureDetector(
@@ -417,12 +419,25 @@ class _IncidentCard extends StatelessWidget {
                                 );
                               },
                               errorBuilder: (context, error, stackTrace) {
+                                print('❌ Image load error for $imageUrl: $error');
                                 return Container(
                                   color: theme.colorScheme.errorContainer,
-                                  child: Icon(
-                                    Icons.broken_image,
-                                    color: theme.colorScheme.onErrorContainer,
-                                    size: 24,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.broken_image,
+                                        color: theme.colorScheme.onErrorContainer,
+                                        size: 20,
+                                      ),
+                                      Text(
+                                        'Error',
+                                        style: TextStyle(
+                                          color: theme.colorScheme.onErrorContainer,
+                                          fontSize: 8,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 );
                               },
@@ -446,7 +461,7 @@ class _IncidentCard extends StatelessWidget {
                       onVote();
                     }
                   },
-                  icon: const Icon(Icons.thumb_up),
+                  icon: const Icon(CupertinoIcons.hand_thumbsup_fill),
                   color: theme.colorScheme.primary,
                 ),
                 Text('${incident.upvotes}'),
@@ -460,7 +475,7 @@ class _IncidentCard extends StatelessWidget {
                       onVote();
                     }
                   },
-                  icon: const Icon(Icons.thumb_down),
+                  icon: const Icon(CupertinoIcons.hand_thumbsdown_fill),
                   color: theme.colorScheme.error,
                 ),
                 Text('${incident.downvotes}'),

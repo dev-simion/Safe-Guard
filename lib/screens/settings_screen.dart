@@ -3,6 +3,7 @@ import 'package:guardian_shield/services/theme_service.dart';
 import 'package:guardian_shield/services/user_service.dart';
 import 'package:guardian_shield/auth/supabase_auth_manager.dart';
 import 'package:guardian_shield/screens/login_screen.dart';
+import 'package:guardian_shield/screens/text_file_viewer_screen.dart';
 import 'package:guardian_shield/screens/emergency_contacts_screen.dart';
 import 'package:guardian_shield/screens/medical_info_screen.dart';
 
@@ -195,7 +196,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.info,
             title: 'About SafeGuard',
             subtitle: 'Learn more about our mission',
-            onTap: () {},
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TextFileViewerScreen(
+                    assetPath: 'assets/about_safeguard.txt',
+                    title: 'About SafeGuard',
+                  ),
+                ),
+              );
+            },
             theme: theme,
           ),
           const SizedBox(height: 12),
@@ -203,17 +214,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.privacy_tip,
             title: 'Privacy Policy',
             subtitle: 'How we protect your data',
-            onTap: () {},
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TextFileViewerScreen(
+                    assetPath: 'assets/privacy_policy.txt',
+                    title: 'Privacy Policy',
+                  ),
+                ),
+              );
+            },
             theme: theme,
           ),
           const SizedBox(height: 12),
-          _SettingCard(
-            icon: Icons.help,
-            title: 'Help & Support',
-            subtitle: 'Get assistance',
-            onTap: () {},
-            theme: theme,
-          ),
           const SizedBox(height: 32),
           Text(
             'Account',

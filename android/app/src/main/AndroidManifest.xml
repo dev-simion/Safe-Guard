@@ -17,6 +17,7 @@
     
     <!-- Phone & SMS -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.VIBRATE"/>
     
     <!-- Optional: for better location accuracy -->
     <uses-feature
