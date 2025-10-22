@@ -30,7 +30,7 @@ class _LocationTrackingScreenState extends State<LocationTrackingScreen> {
   String? _selectedCategory;
 
   // Your Google Maps API Key
-  static const String _googleApiKey = 'AIzaSyBPuKJ6WZdtptGFqw4B4zbQCvNi2vUR-ZQ';
+  static const String _googleApiKey = 'GOOGLE_MAPS_API_KEY';
 
   // Categories with their Google Places types
   final List<PlaceCategory> _categories = [
